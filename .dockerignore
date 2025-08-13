@@ -1,0 +1,17 @@
+#Git
+.git
+.gitignore
+
+#local environment
+.venv
+__pycache__/
+*.pyc
+
+#IDE
+.vscode/
+.idea/
+
+#Docs & Data
+notebooks/
+data/
+README.md

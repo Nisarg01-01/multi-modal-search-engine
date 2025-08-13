@@ -1,0 +1,44 @@
+services:
+  # Our existing FastAPI service
+  api:
+    build: .
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./data:/app/data
+    depends_on:
+      - weaviate
+    # Note: We no longer need to map the port for the api
+    # because our UI will talk to it over the internal Docker network.
+
+  # Our existing Weaviate service
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.24.1
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'none'
+      CLUSTER_HOSTNAME: 'node1'
+
+  # --- OUR NEW FRONTEND SERVICE ---
+  frontend:
+    # We use the same image as our API because it already has Python and Poetry
+    build: .
+    # Map the Streamlit port (8501) to our local machine
+    ports:
+      - "8501:8501"
+    # Mount the ui.py file so we can see changes live
+    volumes:
+      - ./ui.py:/app/ui.py
+    # The command to run the Streamlit app
+    command: poetry run streamlit run ui.py --server.port 8501 --server.address 0.0.0.0
+    depends_on:
+      - api
+
+volumes:
+  weaviate_data:
