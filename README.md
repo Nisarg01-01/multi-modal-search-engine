@@ -2,8 +2,6 @@
 
 > A production-grade vector search engine that understands both **text** ("summer floral dress") and **images**. Powered by OpenAI's CLIP and Weaviate.
 
-![Project Banner](https://via.placeholder.com/1000x400?text=Multi-Modal+Search+Engine+Demo)
-
 ## Overview
 
 Traditional search relies on keywords. This engine uses **semantic vector search** to find products based on meaning.
