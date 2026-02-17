@@ -1,42 +1,53 @@
 services:
-  # Our existing FastAPI service
   api:
     build: .
+    ports:
+      - "8000:8000"
     volumes:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
+      - ./data/fashion-dataset/images:/app/static/images
+    environment:
+      MMSE_WEAVIATE_HOST: weaviate
+      MMSE_WEAVIATE_HTTP_PORT: 8080
+      MMSE_WEAVIATE_GRPC_PORT: 50051
+      MMSE_CLIP_DEVICE: cpu
+      MMSE_LOG_LEVEL: INFO
     depends_on:
-      - weaviate
-    # Note: We no longer need to map the port for the api
-    # because our UI will talk to it over the internal Docker network.
+      weaviate:
+        condition: service_healthy
 
-  # Our existing Weaviate service
   weaviate:
-    image: cr.weaviate.io/semitechnologies/weaviate:1.24.1
+    image: cr.weaviate.io/semitechnologies/weaviate:1.27.0
     ports:
       - "8080:8080"
       - "50051:50051"
     volumes:
       - weaviate_data:/var/lib/weaviate
     environment:
-      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
-      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
-      DEFAULT_VECTORIZER_MODULE: 'none'
-      CLUSTER_HOSTNAME: 'node1'
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+      DEFAULT_VECTORIZER_MODULE: "none"
+      CLUSTER_HOSTNAME: "node1"
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8080/v1/.well-known/ready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 3g
 
-  # --- OUR NEW FRONTEND SERVICE ---
   frontend:
-    # We use the same image as our API because it already has Python and Poetry
     build: .
-    # Map the Streamlit port (8501) to our local machine
     ports:
       - "8501:8501"
-    # Mount the ui.py file so we can see changes live
     volumes:
       - ./ui.py:/app/ui.py
-    # The command to run the Streamlit app
-    command: poetry run streamlit run ui.py --server.port 8501 --server.address 0.0.0.0
+    command: streamlit run ui.py --server.port 8501 --server.address 0.0.0.0
     depends_on:
       - api
 

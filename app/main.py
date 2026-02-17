@@ -1,91 +1,106 @@
 # app/main.py
-from fastapi import FastAPI, UploadFile, File
-from pydantic import BaseModel
-import weaviate
-from sentence_transformers import SentenceTransformer
-from PIL import Image
+from contextlib import asynccontextmanager
 from io import BytesIO
 
-# --- Application Setup ---
-IMAGE_BASE_URL = "https://m.media-amazon.com/images/I/"
-model = SentenceTransformer("clip-ViT-B-32")
-client = None
-app = FastAPI(title="Multi-Modal Search Engine")
+from fastapi import FastAPI, File, UploadFile
+from PIL import Image
+
+from app.config import get_logger
+from app.models import (
+    HealthResponse,
+    ImageSearchResponse,
+    SearchResponse,
+    TextSearchQuery,
+)
+from app.search import SearchService
+
+log = get_logger(__name__)
+search_service = SearchService()
 
 
-# --- Pydantic Models ---
-class TextSearchQuery(BaseModel):
-    query: str
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """Manage startup and shutdown of the search service."""
+    search_service.startup()
+    log.info("Application startup complete")
+    yield
+    search_service.shutdown()
+    log.info("Application shutdown complete")
 
 
-# --- Application Lifecycle ---
-@app.on_event("startup")
-def startup_event():
-    global client
-    client = weaviate.connect_to_local(host="weaviate", port=8080, grpc_port=50051)
-    print("FastAPI app has started and connected to Weaviate.")
+from fastapi.staticfiles import StaticFiles
+
+# ...
+
+app = FastAPI(
+    title="Multi-Modal Search Engine",
+    version="1.0.0",
+    description="Vector search API powered by CLIP and Weaviate",
+    lifespan=lifespan,
+)
+
+import os
+
+# Determin static directory: Docker path vs Local path
+if os.path.exists("/app/static"):
+    static_dir = "/app/static"
+else:
+    # Fallback for local development (relative to project root)
+    static_dir = os.path.join(os.getcwd(), "data/fashion-dataset/images")
+
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+else:
+    log.warning(f"Static directory '{static_dir}' not found. Image serving will be disabled.")
 
 
-@app.on_event("shutdown")
-def shutdown_event():
-    if client:
-        client.close()
-    print("Weaviate connection closed.")
-
-
-# --- Helper Function for Formatting Results ---
-def format_results(response):
-    results = []
-    for item in response.objects:
-        results.append(
-            {
-                "name": item.properties["name"],
-                "image_id": item.properties["image"],
-                "distance": item.metadata.distance,
-            }
-        )
-    return results
-
-
-# --- API Endpoints ---
 @app.get("/")
 def read_root():
-    return {"message": "Welcome!"}
+    return {"message": "Multi-Modal Search Engine API"}
 
 
-@app.post("/text_search/")
-def text_search(search_query: TextSearchQuery):
-    """Performs a vector search based on a text query."""
-    query_vector = model.encode(search_query.query).tolist()
-    products = client.collections.get("Product")
-    response = products.query.near_vector(
-        near_vector=query_vector,
-        limit=5,
-        return_metadata=["distance"],
-        target_vector="text_vector",
-        return_properties=["name", "description", "image"],
+@app.get("/health", response_model=HealthResponse)
+def health_check():
+    """Return service health, Weaviate connectivity, and indexed object count."""
+    connected = search_service.is_healthy()
+    count = search_service.get_object_count() if connected else 0
+    return HealthResponse(
+        status="healthy" if connected else "degraded",
+        weaviate_connected=connected,
+        object_count=count,
     )
-    return {"query": search_query.query, "results": format_results(response)}
 
 
-@app.post("/image_upload_search/")
+@app.post("/text_search/", response_model=SearchResponse)
+def text_search(search_query: TextSearchQuery):
+    """Search by matching text query against product text descriptions."""
+    results = search_service.text_search(search_query.query)
+    return SearchResponse(query=search_query.query, results=results)
+
+
+@app.post("/cross_modal_search/", response_model=SearchResponse)
+def cross_modal_search(search_query: TextSearchQuery):
+    """Search product images using a text query (cross-modal: text to image space)."""
+    results = search_service.cross_modal_text_search(search_query.query)
+    return SearchResponse(query=search_query.query, results=results)
+
+
+@app.post("/hybrid_search/", response_model=SearchResponse)
+def hybrid_search(search_query: TextSearchQuery):
+    """Combine text-to-text and text-to-image search for the broadest coverage."""
+    results = search_service.hybrid_text_search(search_query.query)
+    return SearchResponse(query=search_query.query, results=results)
+
+
+@app.post("/image_upload_search/", response_model=ImageSearchResponse)
 async def image_upload_search(file: UploadFile = File(...)):
-    """Receives an uploaded image, generates an embedding, and performs a vector search."""
+    """Accept an uploaded image, encode it with CLIP, and search by visual similarity."""
     try:
-        # Read the uploaded file into memory
         image_bytes = await file.read()
         query_image = Image.open(BytesIO(image_bytes)).convert("RGB")
     except Exception:
-        return {"error": "Could not read or process uploaded image."}
+        log.warning("Failed to process uploaded image: %s", file.filename)
+        return ImageSearchResponse(query_image_filename=file.filename, results=[])
 
-    query_vector = model.encode(query_image).tolist()
-    products = client.collections.get("Product")
-
-    response = products.query.near_vector(
-        near_vector=query_vector,
-        limit=5,
-        return_metadata=["distance"],
-        target_vector="image_vector",
-        return_properties=["name", "description", "image"],
-    )
-    return {"query_image_filename": file.filename, "results": format_results(response)}
+    results = search_service.image_search(query_image)
+    return ImageSearchResponse(query_image_filename=file.filename, results=results)

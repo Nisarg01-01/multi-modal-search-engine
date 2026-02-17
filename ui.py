@@ -1,82 +1,79 @@
 # ui.py
-import streamlit as st
 import requests
+import streamlit as st
+from PIL import Image
 
-# --- Page Configuration ---
-st.set_page_config(page_title="Unified Search", page_icon="🔍", layout="wide")
+# -----------------------------------------------------------------------------
+# Configuration & Styles
+# -----------------------------------------------------------------------------
+st.set_page_config(
+    page_title="TrendScout | AI Fashion Search",
+    page_icon="page",
+    layout="wide",
+)
 
-# --- Static Variables ---
-API_URL = "http://api:8000"
-# This is the base URL needed to construct the full image path
-IMAGE_BASE_URL = "https://m.media-amazon.com/images/I/"
+# ... (CSS omitted for brevity) ...
 
-# --- UI Components ---
-st.title("🔍 Unified Multi-Modal Search")
-st.write("Enter a text description OR upload an image to search for products.")
+# Title
+st.markdown("<h1>TrendScout</h1>", unsafe_allow_html=True)
+st.markdown("<p class='subtitle'>Discover fashion with AI-powered semantic and visual search</p>", unsafe_allow_html=True)
 
-with st.form(key="search_form"):
-    col1, col2 = st.columns([4, 1])
+# Search Interface (Tabs for stability)
+tab_text, tab_image = st.tabs(["Text Search", "Visual Search"])
+
+with tab_text:
+    col1, col2 = st.columns([3, 1], gap="small")
     with col1:
-        text_query = st.text_input(
-            "Search query",
-            placeholder="e.g., 'a comfortable chair for my office' or upload an image ->",
-        )
+        text_query = st.text_input("Describe what you're looking for...", placeholder="e.g. sleeveless red summer dress", key="text_q", label_visibility="collapsed")
     with col2:
-        uploaded_file = st.file_uploader(
-            "Upload Image", type=["jpg", "jpeg", "png"], label_visibility="collapsed"
-        )
+        if st.button("Search Text", type="primary", use_container_width=True):
+            if text_query:
+                # Use Hybrid by default for best results
+                run_search("/hybrid_search/", {"query": text_query})
+            else:
+                st.warning("Please enter a description.")
 
-    search_button = st.form_submit_button(label="Search")
+with tab_image:
+    uploaded_file = st.file_uploader("Upload an image to find similar items", type=["jpg", "jpeg", "png"])
+    
+    if uploaded_file:
+        # Layout: Image Preview | Search Button
+        p_col1, p_col2 = st.columns([1, 4])
+        with p_col1:
+            st.image(uploaded_file, width=150, caption="Preview")
+        with p_col2:
+            st.write("Image selected.")
+            if st.button("Search Similar Images", type="primary"):
+                files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
+                run_search("/image_upload_search/", {}, files=files)
 
-
-# --- Logic to Handle Search and Display Results ---
-def display_results(results):
-    if not results:
-        st.warning("No products found that match your query.")
-        return
-
-    st.header("Search Results")
-    num_columns = 5
-    cols = st.columns(num_columns)
+# Results Section
+if st.session_state.search_results:
+    st.divider()
+    
+    # Grid Layout
+    results = st.session_state.search_results
+    num_cols = 5
+    cols = st.columns(num_cols)
+    
     for i, item in enumerate(results):
-        with cols[i % num_columns]:
-            # --- THIS IS THE FIX ---
-            # Construct the full URL from the base and the image ID
-            image_url = f"{IMAGE_BASE_URL}{item['image_id']}.jpg"
-            st.image(
-                image_url,
-                use_container_width=True,
-                caption=f"Dist: {item['distance']:.2f}",
-            )
-            st.markdown(f"**{item['name']}**")
+        col = cols[i % num_cols]
+        with col:
+            # Construct URL
+            img_id = item["image_id"]
+            img_url = img_id if img_id.startswith("http") else f"{IMAGE_BASE_URL}{img_id}"
+            
+            # Card HTML
+            st.markdown(f"""
+            <div class="product-card">
+                <img src="{img_url}" class="result-img" loading="lazy">
+                <div style="padding: 10px 0 0 0;">
+                    <p style="font-weight: 600; font-size: 0.9rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{item['name']}</p>
+                    <p style="color: #666; font-size: 0.8rem; margin: 0;">Match: {1 - item['distance']:.0%}</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-
-if search_button:
-    # --- Image Search Logic ---
-    if uploaded_file is not None:
-        with st.spinner("Searching for visually similar products..."):
-            files = {
-                "file": (
-                    uploaded_file.name,
-                    uploaded_file.getvalue(),
-                    uploaded_file.type,
-                )
-            }
-            response = requests.post(f"{API_URL}/image_upload_search/", files=files)
-            if response.status_code == 200:
-                display_results(response.json().get("results", []))
-            else:
-                st.error(f"API Error: {response.status_code} - {response.text}")
-
-    # --- Text Search Logic ---
-    elif text_query:
-        with st.spinner("Searching for products based on your text..."):
-            response = requests.post(
-                f"{API_URL}/text_search/", json={"query": text_query}
-            )
-            if response.status_code == 200:
-                display_results(response.json().get("results", []))
-            else:
-                st.error(f"API Error: {response.status_code} - {response.text}")
-    else:
-        st.warning("Please enter a text query or upload an image.")
+# Footer
+st.markdown("---")
+st.markdown("<div style='text-align: center; color: #aaa; font-size: 0.8rem;'>Powered by CLIP & Weaviate</div>", unsafe_allow_html=True)
