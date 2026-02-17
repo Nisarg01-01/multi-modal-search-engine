@@ -1,10 +1,10 @@
-# 🛍️ Multi-Modal AI Search Engine
+# Multi-Modal AI Search Engine
 
 > A production-grade vector search engine that understands both **text** ("summer floral dress") and **images**. Powered by OpenAI's CLIP and Weaviate.
 
 ![Project Banner](https://via.placeholder.com/1000x400?text=Multi-Modal+Search+Engine+Demo)
 
-## 💡 Overview
+## Overview
 
 Traditional search relies on keywords. This engine uses **semantic vector search** to find products based on meaning.
 
@@ -14,7 +14,7 @@ Traditional search relies on keywords. This engine uses **semantic vector search
 
 ---
 
-## 🚀 Quick Start (Recommended)
+## Quick Start (Recommended)
 
 The easiest way to run the entire system (Database + API + UI) is with **Docker**.
 
@@ -37,7 +37,7 @@ docker compose up --build
 
 ---
 
-## 📦 Data Setup
+## Data Setup
 
 The engine needs data to search! We use the **Fashion Product Images Dataset**.
 
@@ -62,7 +62,7 @@ The engine needs data to search! We use the **Fashion Product Images Dataset**.
 
 ---
 
-## 🛠️ Components & Architecture
+## Components & Architecture
 
 ```mermaid
 graph LR
@@ -78,7 +78,7 @@ graph LR
 
 ---
 
-## 👩‍💻 Manual Setup (For Developers)
+## Manual Setup (For Developers)
 
 If you want to run components individually without Docker (e.g., for debugging):
 
@@ -94,5 +94,5 @@ If you want to run components individually without Docker (e.g., for debugging):
 
 ---
 
-## 📄 License
+## License
 MIT License.
