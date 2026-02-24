@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     clip_model_name: str = "clip-ViT-B-32"
     clip_device: str = "cpu"
     search_result_limit: int = 5
-    image_base_url: str = "https://m.media-amazon.com/images/I/"
+    image_base_url: str = "http://localhost:8000/static/images/"
     log_level: str = "INFO"
 
     model_config = {"env_prefix": "MMSE_"}

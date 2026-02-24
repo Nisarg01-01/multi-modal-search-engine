@@ -30,8 +30,6 @@ async def lifespan(application: FastAPI):
 
 from fastapi.staticfiles import StaticFiles
 
-# ...
-
 app = FastAPI(
     title="Multi-Modal Search Engine",
     version="1.0.0",
@@ -41,12 +39,11 @@ app = FastAPI(
 
 import os
 
-# Determin static directory: Docker path vs Local path
+# Pick the static directory: Docker mount or local dev fallback
 if os.path.exists("/app/static"):
     static_dir = "/app/static"
 else:
-    # Fallback for local development (relative to project root)
-    static_dir = os.path.join(os.getcwd(), "data/fashion-dataset/images")
+    static_dir = os.path.join(os.getcwd(), "data", "flipkart", "images")
 
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")

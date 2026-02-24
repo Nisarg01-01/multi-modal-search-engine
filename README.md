@@ -1,96 +1,94 @@
 # Multi-Modal AI Search Engine
 
-> A production-grade vector search engine that understands both **text** ("summer floral dress") and **images**. Powered by OpenAI's CLIP and Weaviate.
+A search engine that goes beyond keywords. Describe what you want in plain language -- or upload a photo -- and it finds matching products by understanding the actual content, not just text patterns.
 
-## Overview
+Built on **CLIP** (contrastive language-image pre-training) and **Weaviate** (vector database with HNSW indexing).
 
-Traditional search relies on keywords. This engine uses **semantic vector search** to find products based on meaning.
+## What It Does
 
-*   **Semantic Text Search**: Finds products matching the *concept* of your query.
-*   **Visual Search**: Upload an image to find visually similar items.
-*   **Hybrid Search**: Combines both for maximum accuracy.
+| Search Mode | How It Works |
+|---|---|
+| **Text Search** | Encode your query into a vector, then find the nearest product descriptions in embedding space. |
+| **Image Search** | Upload a photo. The engine encodes it the same way and retrieves visually similar products. |
+| **Hybrid Search** | Runs both text-to-text and text-to-image queries, merges the results, and returns the best matches. |
+
+The system currently indexes the **Flipkart Products Dataset** (~18,000 items across electronics, clothing, furniture, and more).
 
 ---
 
-## Quick Start (Recommended)
+## Quick Start
 
-The easiest way to run the entire system (Database + API + UI) is with **Docker**.
+### Prerequisites
+*   Docker Desktop (installed and running)
+*   Git
 
-### 1. Prerequisites
-*   **Docker Desktop** (Installed & Running)
-*   **Git**
-
-### 2. Clone & Run
+### 1. Start the services
 ```bash
 git clone https://github.com/yourusername/multi-modal-search-engine.git
 cd multi-modal-search-engine
-
-# Start everything
 docker compose up --build
 ```
 
-**Access the App:**
-*   **Frontend UI**: [http://localhost:8501](http://localhost:8501)
-*   **Backend API**: [http://localhost:8000](http://localhost:8000)
+### 2. Load the dataset
 
----
+The database starts empty. Download the [Flipkart E-Commerce Dataset](https://www.kaggle.com/datasets/PromptCloudHQ/flipkart-products) from Kaggle and place the CSV here:
 
-## Data Setup
-
-The engine needs data to search! We use the **Fashion Product Images Dataset**.
-
-1.  **Download Data**: [Kaggle Link](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small).
-2.  **Organize Files**:
-    ```
-    multi-modal-search-engine/
-    ├── data/
-    │   └── fashion-dataset/
-    │       ├── images/       <-- Put .jpg files here
-    │       └── styles.csv    <-- Put CSV here
-    ```
-3.  **Ingest Data (One-Time Setup)**:
-    The database starts empty. Run this script once to load the products:
-    ```bash
-    # Run the ingestion script inside the API container
-    docker compose exec api python scripts/build_fashion_database.py
-    ```
-    *Why separate commands?*
-    *   `docker compose up`: Starts the "engine" (Database, API, UI).
-    *   `ingest script`: Fills the "tank" (loads data). You only do this once!
-
----
-
-## Components & Architecture
-
-```mermaid
-graph LR
-    User -->|Browser| UI[Frontend]
-    UI -->|HTTP| API[Backend API]
-    API -->|Vector Search| DB[(Weaviate)]
-    API -->|AI Model| CLIP[CLIP Encoder]
+```
+data/flipkart/flipkart_com-ecommerce_sample.csv
 ```
 
-*   **Frontend**: Streamlit (Port 8501)
-*   **Backend**: FastAPI (Port 8000)
-*   **Database**: Weaviate (Port 8080)
+Then run the ingestion script. It downloads product images in parallel and indexes everything into Weaviate:
+
+```bash
+conda activate multimodal-search
+python scripts/ingest_flipkart.py
+```
+
+This is a one-time step. Data persists in a Docker volume across restarts.
+
+### 3. Use it
+*   **UI**: [http://localhost:8501](http://localhost:8501)
+*   **API**: [http://localhost:8000](http://localhost:8000)
 
 ---
 
-## Manual Setup (For Developers)
+## Architecture
 
-If you want to run components individually without Docker (e.g., for debugging):
+```
+Browser --> Streamlit (8501) --> FastAPI (8000) --> Weaviate (8080)
+                                     |
+                               CLIP ViT-B/32
+                          (text + image encoder)
+```
 
-1.  **Environment**:
-    ```bash
-    conda create -n multi-modal-search python=3.11 -y
-    conda activate multi-modal-search
-    ```
-2.  **Install**: `pip install -r requirements.txt`
-3.  **Database**: You still need Docker for Weaviate: `docker compose up weaviate -d`
-4.  **Run API**: `uvicorn app.main:app --port 8000`
-5.  **Run UI**: `streamlit run ui.py`
+| Component | Role |
+|---|---|
+| **FastAPI** | Serves search endpoints, encodes queries with CLIP, queries Weaviate. |
+| **Weaviate** | Stores product vectors and metadata. Handles approximate nearest-neighbor search via HNSW. |
+| **Streamlit** | Frontend with text input, image upload, and a product grid for results. |
+| **CLIP ViT-B/32** | Encodes both text and images into a shared 512-dimensional vector space. |
+
+All services are containerized with Docker Compose.
+
+---
+
+## Project Structure
+
+```
+app/
+  main.py        -- FastAPI application, routes, static file serving
+  search.py      -- CLIP encoding, Weaviate queries, result formatting
+  models.py      -- Pydantic request/response schemas
+  config.py      -- Environment-based settings (ports, model, limits)
+scripts/
+  ingest_flipkart.py  -- Dataset ingestion (parallel downloads, batch indexing)
+ui.py            -- Streamlit frontend
+docker-compose.yml
+Dockerfile
+requirements.txt
+```
 
 ---
 
 ## License
-MIT License.
+MIT

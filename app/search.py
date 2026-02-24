@@ -51,16 +51,17 @@ class SearchService:
 
     def _format_results(self, response) -> list[SearchResult]:
         """Convert a Weaviate response into a list of SearchResult objects."""
-        results = []
-        for item in response.objects:
-            results.append(
-                SearchResult(
-                    name=item.properties["name"],
-                    image_id=item.properties["image"],
-                    distance=item.metadata.distance,
-                )
+        return [
+            SearchResult(
+                name=item.properties.get("name"),
+                image_id=item.properties.get("image"),
+                distance=item.metadata.distance,
+                description=item.properties.get("description"),
+                brand=item.properties.get("brand"),
+                price=item.properties.get("price"),
             )
-        return results
+            for item in response.objects
+        ]
 
     def text_search(self, query: str) -> list[SearchResult]:
         """Run a vector search against the text_vector named vector."""
@@ -71,7 +72,7 @@ class SearchService:
             limit=settings.search_result_limit,
             return_metadata=["distance"],
             target_vector="text_vector",
-            return_properties=["name", "description", "image"],
+            return_properties=["name", "description", "image", "brand", "price"],
         )
         return self._format_results(response)
 
@@ -84,7 +85,7 @@ class SearchService:
             limit=settings.search_result_limit,
             return_metadata=["distance"],
             target_vector="image_vector",
-            return_properties=["name", "description", "image"],
+            return_properties=["name", "description", "image", "brand", "price"],
         )
         return self._format_results(response)
 
@@ -111,7 +112,7 @@ class SearchService:
             limit=settings.search_result_limit,
             return_metadata=["distance"],
             target_vector="image_vector",
-            return_properties=["name", "description", "image"],
+            return_properties=["name", "description", "image", "brand", "price"],
         )
         return self._format_results(response)
 

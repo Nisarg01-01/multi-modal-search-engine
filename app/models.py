@@ -14,6 +14,9 @@ class SearchResult(BaseModel):
     name: str
     image_id: str
     distance: float
+    description: str | None = None
+    brand: str | None = None
+    price: float | None = None
 
 
 class SearchResponse(BaseModel):
